@@ -30,7 +30,7 @@ def is_ignored(path, ignore_specs, root_dir):
                 return True
     return False
 
-def generate_tree_structure(root_dir, ignore_specs, exclude_dirs):
+def generate_tree_structure(root_dir, ignore_specs, exclude_dirs, exclude_files):
     """Generate a textual tree representation of the directory structure."""
     tree_lines = []
     for dirpath, dirnames, filenames in os.walk(root_dir):
@@ -56,12 +56,11 @@ def generate_tree_structure(root_dir, ignore_specs, exclude_dirs):
         ]
 
         for fname in filenames:
-            fpath = os.path.join(dirpath, fname)
-            if not is_ignored(fpath, ignore_specs, root_dir):
+            fpath = os.path.normpath(os.path.join(dirpath, fname))
+            if not is_ignored(fpath, ignore_specs, root_dir) and fpath not in exclude_files:
                 tree_lines.append(f"{subindent}{fname}")
 
     return '\n'.join(tree_lines)
-
 
 def collect_codebase(root_dir, output_file, include_exts=None, exclude_dirs=None, exclude_files=None):
     if exclude_dirs is None:
@@ -70,7 +69,7 @@ def collect_codebase(root_dir, output_file, include_exts=None, exclude_dirs=None
         exclude_files = []
 
     exclude_dirs = [os.path.abspath(os.path.normpath(os.path.join(root_dir, d))) for d in exclude_dirs]
-    exclude_files = {os.path.normpath(os.path.join(root_dir, f)) for f in exclude_files}
+    exclude_files = {os.path.abspath(os.path.normpath(os.path.join(root_dir, f))) for f in exclude_files}
 
     root_dir = os.path.abspath(root_dir)
     ignore_specs = load_all_gitignore_specs(root_dir)
@@ -80,7 +79,8 @@ def collect_codebase(root_dir, output_file, include_exts=None, exclude_dirs=None
     output_file = os.path.join(output_dir, os.path.basename(output_file))
 
     with open(output_file, 'w', encoding='utf-8') as out:
-        tree_structure = generate_tree_structure(root_dir, ignore_specs, exclude_dirs)
+        tree_structure = generate_tree_structure(root_dir, ignore_specs, exclude_dirs, exclude_files)
+        root_dir_name = os.path.basename(root_dir)
         out.write(f"# {root_dir_name}\n\n```\n{tree_structure}\n```\n\n")
 
         for dirpath, dirnames, filenames in os.walk(root_dir):
@@ -98,8 +98,6 @@ def collect_codebase(root_dir, output_file, include_exts=None, exclude_dirs=None
                 not is_ignored(os.path.join(dirpath, d), ignore_specs, root_dir) and
                 os.path.normpath(os.path.join(dirpath, d)) not in exclude_dirs
             ]
-
-            dirnames[:] = [d for d in dirnames if not d.startswith('.') and not is_ignored(os.path.join(dirpath, d), ignore_specs, root_dir)]
 
             for fname in filenames:
                 file_path = os.path.normpath(os.path.join(dirpath, fname))
